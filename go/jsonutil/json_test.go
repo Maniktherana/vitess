@@ -18,12 +18,14 @@ package jsonutil
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMarshalNoEscape(t *testing.T) {
 	cases := []struct {
 		name     string
-		v        any
+		v        interface{}
 		expected string
 	}{
 		{
@@ -48,13 +50,22 @@ func TestMarshalNoEscape(t *testing.T) {
 			},
 			expected: "{}",
 		},
+		{
+			name:     "error case",
+			v:        func() {},
+			expected: "",
+		},
 	}
+
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			json, _ := MarshalNoEscape(c.v)
-			sjson := string(json[:len(json)-1])
-			if sjson != c.expected {
-				t.Errorf("expected: %v, got: %v", c.expected, sjson)
+			json, err := MarshalNoEscape(c.v)
+
+			if c.name == "error case" {
+				assert.Error(t, err, "expected an error during marshaling")
+			} else {
+				sjson := string(json[:len(json)-1])
+				assert.Equal(t, c.expected, sjson)
 			}
 		})
 	}
@@ -92,13 +103,23 @@ func TestMarshalIndentNoEscape(t *testing.T) {
 			},
 			expected: "{}",
 		},
+		{
+			name:     "error case",
+			v:        func() {},
+			expected: "",
+		},
 	}
+
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			json, _ := MarshalIndentNoEscape(c.v, c.prefix, c.ident)
-			sjson := string(json[:len(json)-1])
-			if sjson != c.expected {
-				t.Errorf("expected: %v, got: %v", c.expected, sjson)
+			json, err := MarshalIndentNoEscape(c.v, c.prefix, c.ident)
+
+			if c.name == "error case" {
+				assert.Error(t, err, "expected an error")
+				return
+			} else {
+				sjson := string(json[:len(json)-1])
+				assert.Equal(t, c.expected, sjson)
 			}
 		})
 	}
