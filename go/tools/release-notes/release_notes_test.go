@@ -18,6 +18,7 @@ package main
 
 import (
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -150,6 +151,135 @@ func TestGenerateReleaseNotes(t *testing.T) {
 			all, err := os.ReadFile(outFileRn.Name())
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedOut, string(all))
+		})
+	}
+}
+
+func TestGetStringForPullRequestInfos(t *testing.T) {
+	testCases := []struct {
+		name      string
+		prPerType prsByType
+		expected  string
+	}{
+		{
+			name: "Single PR",
+			prPerType: prsByType{
+				"Feature": prsByComponent{
+					"ComponentA": []pullRequestInformation{
+						{Number: 1, Title: "PR 1", Labels: labels{{Name: "Type: Feature"}, {Name: "Component: ComponentA"}}},
+					},
+				},
+			},
+			expected: `### Feature
+#### ComponentA
+ * PR 1 [#1](https://github.com/vitessio/vitess/pull/1)
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := getStringForPullRequestInfos(tc.prPerType)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestGetStringForKnownIssues(t *testing.T) {
+	testCases := []struct {
+		name     string
+		issues   []knownIssue
+		expected string
+	}{
+		{
+			name: "Multiple Issues",
+			issues: []knownIssue{
+				{Number: 1, Title: "Issue 1"},
+				{Number: 2, Title: "Issue 2"},
+			},
+			expected: ` * Issue 1 #1 
+ * Issue 2 #2 
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := getStringForKnownIssues(tc.issues)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestGroupAndStringifyPullRequest(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pris     []pullRequestInformation
+		expected string
+	}{
+		{
+			name: "Multiple PRs",
+			pris: []pullRequestInformation{
+				{Number: 1, Title: "PR 1", Labels: labels{{Name: "Type: Feature"}, {Name: "Component: ComponentA"}}},
+				{Number: 2, Title: "PR 2", Labels: labels{{Name: "Type: Bug"}, {Name: "Component: ComponentB"}}},
+			},
+			expected: `### Bug fixes
+#### ComponentB
+ * PR 2 [#2](https://github.com/vitessio/vitess/pull/2)
+### Feature
+#### ComponentA
+ * PR 1 [#1](https://github.com/vitessio/vitess/pull/1)
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := groupAndStringifyPullRequest(tc.pris)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestLoadKnownIssues(t *testing.T) {
+	testCases := []struct {
+		name           string
+		release        string
+		expectedIssues []knownIssue
+		expectedErr    error
+	}{
+		{
+			name:           "Valid Release",
+			release:        "v1.2.3",
+			expectedIssues: []knownIssue{{Number: 1, Title: "Issue 1"}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			issues, err := loadKnownIssues(tc.release)
+			if tc.expectedErr != nil {
+				require.Error(t, err)
+				require.EqualError(t, err, tc.expectedErr.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, len(tc.expectedIssues), len(issues))
+
+				// Sort both slices for comparison
+				sort.Slice(issues, func(i, j int) bool {
+					return issues[i].Number < issues[j].Number
+				})
+				sort.Slice(tc.expectedIssues, func(i, j int) bool {
+					return tc.expectedIssues[i].Number < tc.expectedIssues[j].Number
+				})
+
+				for i := range issues {
+					require.Equal(t, tc.expectedIssues[i], issues[i])
+				}
+			}
 		})
 	}
 }
